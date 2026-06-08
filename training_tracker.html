@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Training Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f7f7f5; --surface:#ffffff; --surface2:#f0efe9;
+  --border:rgba(0,0,0,0.09); --border-md:rgba(0,0,0,0.17);
+  --text:#1a1a18; --muted:#6b6b67; --hint:#a8a89f;
+  --push:#b45309; --pull:#1d6fb8; --arms:#3a6e0f; --legs:#7c3aed;
+  --r:10px; --rsm:7px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#191918; --surface:#232321; --surface2:#2c2c29;
+    --border:rgba(255,255,255,0.08); --border-md:rgba(255,255,255,0.17);
+    --text:#eeeee9; --muted:#98988f; --hint:#636358;
+    --push:#f59e0b; --pull:#60a5fa; --arms:#86efac; --legs:#c4b5fd;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px;}
+.container{max-width:800px;margin:0 auto;}
+
+/* topbar */
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:12px;}
+h1{font-size:20px;font-weight:600;}
+.header-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.auth-area{text-align:right;flex-shrink:0;}
+.auth-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--rsm);border:0.5px solid var(--border-md);background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;font-family:inherit;transition:background .15s;}
+.auth-btn:hover{background:var(--surface2);}
+.sync-row{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--hint);margin-top:5px;justify-content:flex-end;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--hint);flex-shrink:0;}
+.dot.g{background:#4ade80;}.dot.o{background:#fb923c;}
+
+/* picker */
+.section-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--hint);margin-bottom:9px;}
+.routine-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;}
+@media(max-width:600px){.routine-grid{grid-template-columns:1fr 1fr;}}
+.rc{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:11px 13px;cursor:pointer;transition:border-color .15s,background .15s;}
+.rc:hover{border-color:var(--border-md);background:var(--surface2);}
+.rc.active{border-color:var(--text);}
+.rc-name{font-size:13px;font-weight:500;}
+.rc-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.rc-dot{width:8px;height:8px;border-radius:50%;margin-bottom:7px;}
+
+/* date */
+.date-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+.date-row label{font-size:13px;color:var(--muted);}
+input[type=date]{height:36px;border-radius:var(--rsm);border:0.5px solid var(--border-md);background:var(--surface2);color:var(--text);padding:0 10px;font-size:14px;font-family:inherit;outline:none;}
+input[type=date]:focus{border-color:#3b82f6;}
+
+/* exercise block */
+.ex-block{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden;}
+.ex-header{display:flex;align-items:center;gap:9px;padding:11px 14px 9px;border-bottom:0.5px solid var(--border);}
+.cat-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.ex-name{font-size:14px;font-weight:500;flex:1;}
+.ex-meta{font-size:12px;color:var(--muted);}
+.ex-note{font-size:11px;color:var(--hint);font-style:italic;margin-top:1px;}
+.pr-badge{font-size:10px;padding:2px 7px;border-radius:4px;background:#dcfce7;color:#15803d;font-weight:600;display:none;white-space:nowrap;}
+@media(prefers-color-scheme:dark){.pr-badge{background:#14532d;color:#86efac;}}
+
+/* sets table */
+.sets-area{padding:10px 14px 12px;}
+.sets-header{display:grid;gap:6px;margin-bottom:6px;}
+.set-hdr-cell{font-size:11px;color:var(--hint);text-align:center;}
+.set-hdr-cell:first-child{text-align:left;}
+.set-row{display:grid;gap:6px;margin-bottom:5px;align-items:center;}
+.set-lbl{font-size:12px;color:var(--muted);padding-top:2px;}
+.set-input{width:100%;height:32px;border-radius:6px;border:0.5px solid var(--border-md);background:var(--surface2);color:var(--text);padding:0 7px;font-size:13px;font-family:inherit;outline:none;text-align:center;transition:border-color .15s;}
+.set-input:focus{border-color:#3b82f6;}
+.set-input.done{border-color:#22c55e;background:rgba(34,197,94,0.06);}
+@media(prefers-color-scheme:dark){.set-input.done{background:rgba(34,197,94,0.09);}}
+.set-input::placeholder{color:var(--hint);}
+
+/* drop */
+.drop-area{border-top:0.5px dashed var(--border);margin-top:6px;padding-top:8px;}
+.drop-lbl{font-size:11px;color:var(--hint);margin-bottom:5px;}
+
+/* history */
+.hist-area{border-top:0.5px solid var(--border);padding:7px 14px 9px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.hist-lbl{font-size:11px;color:var(--hint);margin-right:2px;}
+.hist-chip{font-size:11px;color:var(--muted);background:var(--surface2);border:0.5px solid var(--border);border-radius:5px;padding:1px 7px;}
+
+/* actions */
+.actions{display:flex;gap:10px;margin-top:6px;}
+.btn{height:40px;border-radius:var(--rsm);border:0.5px solid var(--border-md);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:background .15s;padding:0 16px;}
+.btn:hover{background:var(--surface2);}
+.btn-log{flex:1;}
+
+/* banner */
+.banner{background:#eff6ff;border:0.5px solid #bfdbfe;border-radius:var(--r);padding:14px 16px;margin-bottom:20px;font-size:13px;color:#1e40af;line-height:1.7;}
+@media(prefers-color-scheme:dark){.banner{background:#1e3a5f;border-color:#1d4ed8;color:#93c5fd;}}
+.banner ol{padding-left:18px;margin-top:6px;}
+.banner code{font-family:monospace;background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:4px;font-size:12px;}
+.cid-row{display:flex;gap:8px;margin-top:10px;}
+.cid-input{flex:1;height:36px;border-radius:var(--rsm);border:0.5px solid var(--border-md);background:var(--surface);color:var(--text);padding:0 10px;font-size:12px;font-family:inherit;outline:none;}
+
+/* toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:0.5px solid var(--border-md);border-radius:var(--r);padding:10px 20px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="topbar">
+    <div>
+      <h1>Training tracker</h1>
+      <div class="header-sub">Pick routine · log sets · sync to Drive · export Excel</div>
+    </div>
+    <div class="auth-area">
+      <button class="auth-btn" id="authBtn" onclick="handleAuth()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="authLabel">Connect Drive</span>
+      </button>
+      <div class="sync-row"><span class="dot" id="syncDot"></span><span id="syncLabel">Not connected</span></div>
+    </div>
+  </div>
+
+  <div class="banner" id="setupBanner">
+    <strong>One-time Google Drive setup</strong>
+    <ol>
+      <li>Go to <a href="https://console.cloud.google.com/" target="_blank">console.cloud.google.com</a> → APIs &amp; Services → Credentials</li>
+      <li>Create an OAuth 2.0 Client ID · type: <em>Web application</em></li>
+      <li>Add <code>file:///</code> (or your hosting URL) as an Authorised JavaScript origin</li>
+      <li>Paste the Client ID below</li>
+    </ol>
+    <div class="cid-row">
+      <input class="cid-input" type="text" id="clientIdInput" placeholder="Your Client ID (ends in .apps.googleusercontent.com)" />
+      <button class="btn" onclick="saveClientId()">Save</button>
+    </div>
+  </div>
+
+  <div class="section-lbl">Choose routine</div>
+  <div class="routine-grid" id="routineGrid"></div>
+
+  <div class="date-row">
+    <label>Session date</label>
+    <input type="date" id="sessionDate" />
+  </div>
+
+  <div id="exerciseList"></div>
+
+  <div class="actions">
+    <button class="btn btn-log" onclick="logSession()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      Log session
+    </button>
+    <button class="btn" onclick="exportExcel()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export .xlsx
+    </button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── ROUTINES ─────────────────────────────────────────────────────────────────
+const ROUTINES = [
+  {
+    id:'push_full', name:'Push', sub:'Full · ~80 min', group:'upper', color:'#b45309',
+    exercises:[
+      {id:'bb_bench',     n:'Barbell bench press',       s:4, r:'6–8',   c:'push'},
+      {id:'db_shoulder',  n:'Dumbbell shoulder press',   s:4, r:'8–10',  c:'push'},
+      {id:'incline_db',   n:'Incline dumbbell press',    s:3, r:'8–10',  c:'push'},
+      {id:'lat_raise',    n:'Lateral raises',            s:4, r:'12–15', c:'push'},
+      {id:'cgbp',         n:'Close-grip bench press',    s:3, r:'8–10',  c:'arms'},
+      {id:'overhead_ext', n:'Overhead tricep extension', s:3, r:'10–12', c:'arms', drop:true},
+      {id:'pushdown',     n:'Cable pushdowns (rope)',     s:3, r:'10–12', c:'arms'},
+    ]
+  },
+  {
+    id:'push_quick', name:'Push', sub:'Quick · ~45 min', group:'upper', color:'#b45309',
+    exercises:[
+      {id:'bb_bench',     n:'Barbell bench press',       s:4, r:'6–8',   c:'push'},
+      {id:'db_shoulder',  n:'Dumbbell shoulder press',   s:3, r:'8–10',  c:'push'},
+      {id:'lat_raise',    n:'Lateral raises',            s:3, r:'12–15', c:'push'},
+      {id:'overhead_ext', n:'Overhead tricep extension', s:3, r:'10–12', c:'arms', drop:true},
+    ]
+  },
+  {
+    id:'pull_full', name:'Pull', sub:'Full · ~80 min', group:'upper', color:'#1d6fb8',
+    exercises:[
+      {id:'lat_pulldown',  n:'Lat pulldown',            s:4, r:'8–10',  c:'pull'},
+      {id:'cable_row',     n:'Seated cable row',        s:4, r:'8–10',  c:'pull'},
+      {id:'pullover',      n:'Cable/DB pullover',       s:3, r:'10–12', c:'pull'},
+      {id:'face_pull',     n:'Cable face pulls',        s:3, r:'15',    c:'pull', note:'Always — posture & neck'},
+      {id:'hammer_curl',   n:'Hammer curls',            s:4, r:'8–10',  c:'arms', drop:true},
+      {id:'preacher_curl', n:'Preacher curl',           s:3, r:'8–10',  c:'arms'},
+    ]
+  },
+  {
+    id:'pull_quick', name:'Pull', sub:'Quick · ~45 min', group:'upper', color:'#1d6fb8',
+    exercises:[
+      {id:'lat_pulldown', n:'Lat pulldown',             s:4, r:'8–10',  c:'pull'},
+      {id:'cable_row',    n:'Seated cable row',         s:3, r:'8–10',  c:'pull'},
+      {id:'face_pull',    n:'Cable face pulls',         s:2, r:'15',    c:'pull', note:'Always — posture & neck'},
+      {id:'hammer_curl',  n:'Hammer curls',             s:4, r:'8–10',  c:'arms', drop:true},
+    ]
+  },
+  {
+    id:'sho_full', name:'Shoulders & arms', sub:'Full · ~80 min', group:'upper', color:'#6d28d9',
+    exercises:[
+      {id:'db_bench',      n:'Dumbbell bench press',      s:4, r:'8–10',  c:'push', note:'Horizontal variation'},
+      {id:'lat_raise',     n:'Lateral raises',            s:4, r:'12–15', c:'push', note:'Heavy shoulder focus'},
+      {id:'face_pull',     n:'Cable face pulls',          s:3, r:'15',    c:'pull'},
+      {id:'hammer_curl',   n:'Hammer curls',              s:4, r:'8–10',  c:'arms', drop:true},
+      {id:'preacher_curl', n:'Preacher / barbell curl',   s:3, r:'8–10',  c:'arms'},
+      {id:'overhead_ext',  n:'Overhead tricep extension', s:3, r:'10–12', c:'arms', drop:true},
+      {id:'pushdown',      n:'Cable pushdowns',           s:3, r:'10–12', c:'arms'},
+    ]
+  },
+  {
+    id:'sho_quick', name:'Shoulders & arms', sub:'Quick · ~45 min', group:'upper', color:'#6d28d9',
+    exercises:[
+      {id:'lat_raise',    n:'Lateral raises',            s:4, r:'12–15', c:'push'},
+      {id:'face_pull',    n:'Cable face pulls',          s:2, r:'15',    c:'pull'},
+      {id:'hammer_curl',  n:'Hammer curls',              s:4, r:'8–10',  c:'arms', drop:true},
+      {id:'pushdown',     n:'Cable pushdowns',           s:3, r:'10–12', c:'arms'},
+    ]
+  },
+  {
+    id:'legs_full', name:'Legs', sub:'Full · ~80 min', group:'legs', color:'#0f766e',
+    exercises:[
+      {id:'leg_press',     n:'Leg press',                s:4, r:'8–10',  c:'legs', note:'Feet shoulder-width, full ROM'},
+      {id:'hack_squat',    n:'Hack squat',               s:4, r:'8–10',  c:'legs', note:'Controlled descent, knees track toes'},
+      {id:'leg_ext',       n:'Leg extension',            s:3, r:'12–15', c:'legs', note:'ACL-safe range — avoid full lockout'},
+      {id:'lying_curl',    n:'Lying leg curl',           s:4, r:'10–12', c:'legs'},
+      {id:'seated_curl',   n:'Seated leg curl',          s:3, r:'12–15', c:'legs'},
+      {id:'calf_press',    n:'Calf press (leg press)',   s:4, r:'15–20', c:'legs'},
+      {id:'hip_abduct',    n:'Hip abduction machine',    s:3, r:'15',    c:'legs', note:'Glute med — good for ACL stability'},
+    ]
+  },
+  {
+    id:'legs_quick', name:'Legs', sub:'Quick · ~45 min', group:'legs', color:'#0f766e',
+    exercises:[
+      {id:'leg_press',     n:'Leg press',                s:4, r:'8–10',  c:'legs', note:'Feet shoulder-width, full ROM'},
+      {id:'hack_squat',    n:'Hack squat',               s:3, r:'8–10',  c:'legs', note:'Controlled descent, knees track toes'},
+      {id:'lying_curl',    n:'Lying leg curl',           s:3, r:'10–12', c:'legs'},
+      {id:'calf_press',    n:'Calf press (leg press)',   s:3, r:'15–20', c:'legs'},
+    ]
+  },
+];
+
+const CAT_COLOR = {push:'#b45309', pull:'#1d6fb8', arms:'#3a6e0f', legs:'#0f766e'};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let sessions = [];
+let driveFileId = null;
+let tokenClient = null;
+let accessToken = null;
+let CLIENT_ID = localStorage.getItem('ub_tracker_client_id') || '';
+let activeId = localStorage.getItem('ub_tracker_routine') || 'push_full';
+
+// ─── PICKER ───────────────────────────────────────────────────────────────────
+function renderPicker() {
+  const upperRoutines = ROUTINES.filter(r => r.group === 'upper');
+  const legRoutines   = ROUTINES.filter(r => r.group === 'legs');
+
+  document.getElementById('routineGrid').innerHTML = `
+    <div style="grid-column:1/-1;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--hint);margin-bottom:2px;">Upper body</div>
+    ${upperRoutines.map(r => rcHTML(r)).join('')}
+    <div style="grid-column:1/-1;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--hint);margin:8px 0 2px;">Legs</div>
+    ${legRoutines.map(r => rcHTML(r)).join('')}
+  `;
+}
+
+function rcHTML(r) {
+  return `<div class="rc${r.id===activeId?' active':''}" onclick="selectRoutine('${r.id}')">
+    <div class="rc-dot" style="background:${r.color}"></div>
+    <div class="rc-name">${r.name}</div>
+    <div class="rc-sub">${r.sub}</div>
+  </div>`;
+}
+
+function selectRoutine(id) {
+  activeId = id;
+  localStorage.setItem('ub_tracker_routine', id);
+  renderPicker();
+  renderExercises();
+}
+
+// ─── HISTORY HELPERS ──────────────────────────────────────────────────────────
+function getPB(exId) {
+  let best = 0;
+  sessions.forEach(s => {
+    const e = s.exercises?.find(x => x.id === exId);
+    if (e?.sets) e.sets.forEach(set => { if (parseFloat(set.w) > best) best = parseFloat(set.w); });
+  });
+  return best;
+}
+
+function getLastSessions(exId, n) {
+  return sessions
+    .filter(s => s.exercises?.some(x => x.id === exId))
+    .slice(-n)
+    .map(s => {
+      const e = s.exercises.find(x => x.id === exId);
+      const best = e?.sets ? Math.max(...e.sets.map(st => parseFloat(st.w)||0)) : 0;
+      return { date: s.date, best };
+    });
+}
+
+// ─── RENDER EXERCISES ─────────────────────────────────────────────────────────
+function renderExercises() {
+  const routine = ROUTINES.find(r => r.id === activeId);
+  if (!routine) return;
+  const list = document.getElementById('exerciseList');
+  list.innerHTML = routine.exercises.map(ex => buildExBlock(ex)).join('');
+}
+
+function buildExBlock(ex) {
+  const pb = getPB(ex.id);
+  const last = getLastSessions(ex.id, 3);
+  const colTemplate = `grid-template-columns: 40px repeat(${ex.s}, 1fr)`;
+
+  // set column headers
+  let setHeaders = `<div class="set-hdr-cell"></div>`;
+  for (let i = 1; i <= ex.s; i++) setHeaders += `<div class="set-hdr-cell">Set ${i}</div>`;
+
+  // weight row
+  let wCells = `<div class="set-lbl">kg</div>`;
+  for (let i = 0; i < ex.s; i++) {
+    wCells += `<input class="set-input" type="number" step="0.5" min="0" id="w_${ex.id}_${i}" placeholder="–" oninput="checkPR('${ex.id}',this.value,${pb})" />`;
+  }
+
+  // reps row
+  let rCells = `<div class="set-lbl">reps</div>`;
+  for (let i = 0; i < ex.s; i++) {
+    rCells += `<input class="set-input" type="number" step="1" min="0" id="r_${ex.id}_${i}" placeholder="${ex.r}" oninput="markDone('${ex.id}',${i})" />`;
+  }
+
+  // drop set (1 set)
+  let dropHTML = '';
+  if (ex.drop) {
+    dropHTML = `<div class="drop-area">
+      <div class="drop-lbl">↳ drop set</div>
+      <div class="set-row" style="grid-template-columns:40px 1fr 1fr;">
+        <div class="set-lbl">kg</div>
+        <input class="set-input" type="number" step="0.5" min="0" id="wd_${ex.id}" placeholder="–" />
+        <div></div>
+      </div>
+      <div class="set-row" style="grid-template-columns:40px 1fr 1fr;">
+        <div class="set-lbl">reps</div>
+        <input class="set-input" type="number" step="1" min="0" id="rd_${ex.id}" placeholder="–" />
+        <div></div>
+      </div>
+    </div>`;
+  }
+
+  // history
+  const histHTML = last.length
+    ? last.map(l => `<span class="hist-chip">${l.date.slice(5)}: ${l.best}kg</span>`).join('')
+    : `<span style="font-size:11px;color:var(--hint)">No entries yet</span>`;
+
+  return `
+    <div class="ex-block">
+      <div class="ex-header">
+        <div class="cat-dot" style="background:${CAT_COLOR[ex.c]}"></div>
+        <div style="flex:1">
+          <div class="ex-name">${ex.n}</div>
+          ${ex.note ? `<div class="ex-note">${ex.note}</div>` : ''}
+        </div>
+        <div class="ex-meta">${ex.s} sets · ${ex.r} reps</div>
+        <span class="pr-badge" id="pr_${ex.id}">PR ✦</span>
+      </div>
+      <div class="sets-area">
+        <div class="sets-header" style="${colTemplate}">${setHeaders}</div>
+        <div class="set-row" style="${colTemplate}">${wCells}</div>
+        <div class="set-row" style="${colTemplate}">${rCells}</div>
+        ${dropHTML}
+      </div>
+      <div class="hist-area">
+        <span class="hist-lbl">Recent best:</span>
+        ${histHTML}
+      </div>
+    </div>`;
+}
+
+function checkPR(id, val, pb) {
+  const badge = document.getElementById('pr_' + id);
+  if (badge) badge.style.display = (parseFloat(val) > pb && pb > 0) ? 'inline' : 'none';
+}
+
+function markDone(id, i) {
+  const rEl = document.getElementById(`r_${id}_${i}`);
+  const wEl = document.getElementById(`w_${id}_${i}`);
+  if (rEl && wEl && rEl.value && wEl.value) {
+    rEl.classList.add('done'); wEl.classList.add('done');
+  } else {
+    rEl?.classList.remove('done'); wEl?.classList.remove('done');
+  }
+}
+
+// ─── LOG SESSION ──────────────────────────────────────────────────────────────
+async function logSession() {
+  const date = document.getElementById('sessionDate').value;
+  if (!date) { showToast('Pick a session date first'); return; }
+  const routine = ROUTINES.find(r => r.id === activeId);
+
+  const exercises = routine.exercises.map(ex => {
+    const sets = [];
+    for (let i = 0; i < ex.s; i++) {
+      sets.push({
+        w: document.getElementById(`w_${ex.id}_${i}`)?.value || '',
+        r: document.getElementById(`r_${ex.id}_${i}`)?.value || '',
+      });
+    }
+    const entry = { id: ex.id, name: ex.n, sets };
+    if (ex.drop) {
+      entry.drop = {
+        w: document.getElementById(`wd_${ex.id}`)?.value || '',
+        r: document.getElementById(`rd_${ex.id}`)?.value || '',
+      };
+    }
+    return entry;
+  });
+
+  const entry = { date, routineId: activeId, routineName: routine.name + ' · ' + routine.sub, exercises };
+  const idx = sessions.findIndex(s => s.date === date && s.routineId === activeId);
+  if (idx >= 0) sessions[idx] = entry; else sessions.push(entry);
+  sessions.sort((a,b) => a.date.localeCompare(b.date) || a.routineId.localeCompare(b.routineId));
+
+  localStorage.setItem('ub_tracker_local', JSON.stringify(sessions));
+  renderExercises();
+  showToast('Session logged ✓');
+  await saveToDrive();
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function exportExcel() {
+  if (!sessions.length) { showToast('No sessions to export yet'); return; }
+  const wb = XLSX.utils.book_new();
+
+  // All sessions flat
+  const allRows = [['Date','Routine','Exercise','Set','Weight (kg)','Reps']];
+  sessions.forEach(s => s.exercises?.forEach(e => {
+    e.sets?.forEach((st,i) => allRows.push([s.date, s.routineName, e.name, i+1, parseFloat(st.w)||'', parseInt(st.r)||'']));
+    if (e.drop?.w) allRows.push([s.date, s.routineName, e.name, 'drop', parseFloat(e.drop.w)||'', parseInt(e.drop.r)||'']);
+  }));
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  ws['!cols'] = [12,28,26,6,14,8].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, 'All sessions');
+
+  // Per-routine summary (best weight per exercise per session)
+  ROUTINES.forEach(r => {
+    const rSessions = sessions.filter(s => s.routineId === r.id);
+    if (!rSessions.length) return;
+    const headers = ['Date', ...r.exercises.map(e => e.n + ' best kg'), ...r.exercises.map(e => e.n + ' vol (kg×reps)')];
+    const rows = rSessions.map(s => {
+      const row = [s.date];
+      r.exercises.forEach(ex => {
+        const e = s.exercises?.find(x => x.id === ex.id);
+        const best = e?.sets ? Math.max(...e.sets.map(st=>parseFloat(st.w)||0)) : '';
+        row.push(best||'');
+      });
+      r.exercises.forEach(ex => {
+        const e = s.exercises?.find(x => x.id === ex.id);
+        const vol = e?.sets ? e.sets.reduce((sum,st)=>sum+(parseFloat(st.w)||0)*(parseInt(st.r)||0),0) : '';
+        row.push(vol||'');
+      });
+      return row;
+    });
+    const rWs = XLSX.utils.aoa_to_sheet([headers,...rows]);
+    rWs['!cols'] = headers.map((_,i)=>({wch:i===0?12:18}));
+    XLSX.utils.book_append_sheet(wb, rWs, (r.name+' '+r.sub.split('·')[0].trim()).slice(0,28));
+  });
+
+  XLSX.writeFile(wb, 'training_tracker.xlsx');
+  showToast('Exported training_tracker.xlsx');
+}
+
+// ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
+const FILE_NAME = 'ub_tracker_data.json';
+
+function initGsi() {
+  if (!CLIENT_ID || !window.google) return;
+  document.getElementById('setupBanner').style.display = 'none';
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.appdata',
+    callback: async resp => {
+      if (resp.error) { showToast('Auth error: ' + resp.error); return; }
+      accessToken = resp.access_token;
+      document.getElementById('authLabel').textContent = 'Connected ✓';
+      setSyncLabel('Drive connected','g');
+      await loadFromDrive();
+      renderExercises();
+    }
+  });
+}
+
+function handleAuth() {
+  if (!CLIENT_ID) { showToast('Paste your Client ID first'); return; }
+  if (accessToken) { showToast('Already connected'); return; }
+  if (!tokenClient) initGsi();
+  tokenClient?.requestAccessToken({ prompt:'consent' });
+}
+
+async function loadFromDrive() {
+  setSyncLabel('Syncing…','o');
+  try {
+    const res = await fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name="'+FILE_NAME+'"&fields=files(id)', {headers:{Authorization:'Bearer '+accessToken}});
+    const data = await res.json();
+    if (data.files?.length) {
+      driveFileId = data.files[0].id;
+      const file = await fetch('https://www.googleapis.com/drive/v3/files/'+driveFileId+'?alt=media', {headers:{Authorization:'Bearer '+accessToken}});
+      sessions = await file.json();
+      setSyncLabel('Synced from Drive','g');
+    } else {
+      setSyncLabel('No data yet on Drive','g');
+    }
+  } catch { setSyncLabel('Sync failed','o'); }
+}
+
+async function saveToDrive() {
+  if (!accessToken) return;
+  setSyncLabel('Saving…','o');
+  const body = JSON.stringify(sessions);
+  try {
+    if (driveFileId) {
+      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+driveFileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body});
+    } else {
+      const m = await (await fetch('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:FILE_NAME,parents:['appDataFolder']})})).json();
+      driveFileId = m.id;
+      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+driveFileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body});
+    }
+    setSyncLabel('Saved to Drive ✓','g');
+  } catch { setSyncLabel('Save failed','o'); }
+}
+
+function setSyncLabel(t,c){ document.getElementById('syncLabel').textContent=t; document.getElementById('syncDot').className='dot'+(c?' '+c:''); }
+
+function saveClientId() {
+  const v = document.getElementById('clientIdInput').value.trim();
+  if (!v) return;
+  CLIENT_ID = v;
+  localStorage.setItem('ub_tracker_client_id', v);
+  document.getElementById('setupBanner').style.display = 'none';
+  showToast('Client ID saved — click Connect Drive');
+  initGsi();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  document.getElementById('sessionDate').value = new Date().toISOString().slice(0,10);
+  try { const loc = localStorage.getItem('ub_tracker_local'); if(loc) sessions=JSON.parse(loc); } catch {}
+  if (CLIENT_ID) document.getElementById('setupBanner').style.display='none';
+  const gsi = document.createElement('script');
+  gsi.src = 'https://accounts.google.com/gsi/client';
+  gsi.onload = initGsi;
+  document.head.appendChild(gsi);
+  renderPicker();
+  renderExercises();
+};
+</script>
+</body>
+</html>
