@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -639,6 +638,7 @@ function exportExcel(){
 
 // ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
 const FILE_NAME='ub_tracker_data.json';
+
 function initGsi(){
   if(!CLIENT_ID||!window.google)return;
   document.getElementById('setupBanner').style.display='none';
@@ -646,19 +646,38 @@ function initGsi(){
     client_id:CLIENT_ID,
     scope:'https://www.googleapis.com/auth/drive.appdata',
     callback:async resp=>{
-      if(resp.error){showToast('Auth error: '+resp.error);return;}
+      if(resp.error){
+        // silent auto-connect failed (no prior consent on this device) — that's ok, just show button
+        if(resp.error==='interaction_required'||resp.error==='consent_required'||resp.error==='access_denied'){
+          setSyncLabel('Click to connect','');
+          return;
+        }
+        showToast('Auth error: '+resp.error);
+        return;
+      }
       accessToken=resp.access_token;
+      // remember that this account has consented on this device
+      localStorage.setItem('ub_tracker_authed','1');
       document.getElementById('authLabel').textContent='Connected ✓';
       setSyncLabel('Drive connected','g');
       await loadFromDrive();
       renderExercises();
+      renderPicker();
     }
   });
+
+  // if user has connected before on this device, try silently (no popup)
+  if(localStorage.getItem('ub_tracker_authed')){
+    setSyncLabel('Connecting…','o');
+    tokenClient.requestAccessToken({prompt:''});
+  }
 }
+
 function handleAuth(){
   if(!CLIENT_ID){showToast('Paste your Client ID first');return;}
   if(accessToken){showToast('Already connected');return;}
   if(!tokenClient)initGsi();
+  // explicit click always shows consent screen so user can pick account
   tokenClient?.requestAccessToken({prompt:'consent'});
 }
 async function loadFromDrive(){
